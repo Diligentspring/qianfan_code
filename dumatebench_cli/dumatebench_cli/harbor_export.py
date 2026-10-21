@@ -30,10 +30,10 @@ bridge-agent smoke test: it stages ``checks.yaml`` back under
 ``/opt/dumate/task/evaluator/`` (the path ``evaluator.py`` itself hardcodes,
 unchanged from the pre-Harbor layout) before running ``evaluator.py``
 (uploaded to ``/tests/evaluator.py`` by Harbor's verifier) against
-``/opt/dumate/task``, then copies only the numeric fields of
-``run_outputs/reward.json`` (dumatebench's
-``complete_pass``/``partial_pass``/etc.) into ``/logs/verifier/reward.json``,
-which is the file Harbor's verifier reads with priority over ``reward.txt``.
+``/opt/dumate/task``, then writes the aggregate score from
+``run_outputs/reward.json`` into ``/logs/verifier/reward.json``. Harbor 0.5
+requires one scalar reward per trial; the complete DuMateBench report remains
+in ``run_outputs``.
 When ``OPENAI_API_KEY`` and a judge model are supplied, the generated verifier
 also runs the unified LLM judge and includes its normalized score fields.
 
@@ -51,6 +51,7 @@ search instead of trying to reproduce the repo layout inside the container.
 from __future__ import annotations
 
 import shutil
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -101,11 +102,15 @@ set -e
 mkdir -p /opt/dumate/task/evaluator
 cp /tests/checks.yaml /opt/dumate/task/evaluator/checks.yaml
 DUMATE_EVALUATE_PY=/tests/evaluate.py python3 /tests/evaluator.py --task-dir /opt/dumate/task || true
-if [ -n "${OPENAI_API_KEY:-}" ] && [ -n "${DUMATE_LLM_JUDGE_MODEL:-${OPENAI_MODEL:-}}" ]; then
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+  # The runner defaults to gpt-4o when no model variable is supplied. Keep
+  # stderr as an artifact so a transient/API configuration failure is visible
+  # while preserving the deterministic DuMateBench reward.
   PYTHONPATH=/tests DUMATE_EVALUATE_PY=/tests/evaluate.py \
     python3 /tests/run_harbor_llm_judge.py --task-dir /opt/dumate/task \
-    --model "${DUMATE_LLM_JUDGE_MODEL:-${OPENAI_MODEL}}" \
-    --base-url "${OPENAI_BASE_URL:-}" || true
+    --model "${DUMATE_LLM_JUDGE_MODEL:-${OPENAI_MODEL:-gpt-4o}}" \
+    --base-url "${OPENAI_BASE_URL:-}" \
+    2>/logs/verifier/llm_judge.stderr.log || true
 fi
 python3 -c "
 import json
@@ -115,8 +120,13 @@ path = root / 'reward_with_llm_judge.json'
 if not path.is_file():
     path = root / 'reward.json'
 raw = json.load(path.open())
-numeric = {k: v for k, v in raw.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
-json.dump(numeric, open('/logs/verifier/reward.json', 'w'))
+# Harbor 0.5's built-in mean metric accepts exactly one scalar per trial.
+# Keep the complete DuMateBench report in the task outputs and expose its
+# aggregate score as Harbor's scalar reward.
+score = raw.get('final_score')
+if not isinstance(score, (int, float)) or isinstance(score, bool):
+    score = raw.get('partial_pass', 0.0)
+json.dump({'reward': score}, open('/logs/verifier/reward.json', 'w'))
 "
 """
 
@@ -168,6 +178,36 @@ def _environment_resource_settings(
             continue
         settings.append(f"{key} = {value}")
     return "\n".join(settings)
+
+
+def _make_harbor_package_portable(output_dir: Path, source_task_dir: Path) -> None:
+    """Rewrite the source-repo Docker files for a standalone Harbor package."""
+    environment = output_dir / "environment"
+    dockerfile = environment / "Dockerfile"
+    compose = environment / "docker-compose.yaml"
+    if dockerfile.is_file():
+        text = dockerfile.read_text(encoding="utf-8")
+        try:
+            source_prefix = source_task_dir.relative_to(_EVALUATOR_ROOT.parent).as_posix()
+        except ValueError:
+            source_prefix = ""
+        text = text.replace(f"datasets/dev/template_task/", "")
+        if source_prefix:
+            text = text.replace(f"{source_prefix}/", "")
+        if "pip install --no-cache-dir \"openai>=1.0.0\"" not in text:
+            text = text.replace(
+                "\nRUN useradd -ms /bin/bash agent",
+                "\nRUN pip install --no-cache-dir \"openai>=1.0.0\"\n\nRUN useradd -ms /bin/bash agent",
+                1,
+            )
+        dockerfile.write_text(text, encoding="utf-8")
+    if compose.is_file():
+        text = compose.read_text(encoding="utf-8")
+        # Harbor's Docker environment contract names the task service `main`.
+        text = re.sub(r"(?m)^(\s*)task:\s*$", r"\1main:", text, count=1)
+        text = re.sub(r"(?m)^(\s*)context:\s*.*$", r"\1context: ..", text)
+        text = re.sub(r"(?m)^(\s*)dockerfile:\s*.*$", r"\1dockerfile: environment/Dockerfile", text)
+        compose.write_text(text, encoding="utf-8")
 
 
 def load_task_yaml(task_dir: Path) -> dict[str, Any]:
@@ -252,6 +292,19 @@ def export_task(task_dir: Path, output_dir: Path, *, overwrite: bool = False) ->
         shutil.rmtree(output_dir)
 
     shutil.copytree(task_dir, output_dir, ignore=_ignore_runtime_state)
+
+    # The source Dockerfile imports the shared agent runners from the repo
+    # root. Include them in the exported package and rewrite source-relative
+    # COPY/build-context paths so the package can be moved anywhere.
+    shared_agents = _EVALUATOR_ROOT.parent / "agents"
+    if shared_agents.is_dir():
+        shutil.copytree(
+            shared_agents,
+            output_dir / "agents",
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+    _make_harbor_package_portable(output_dir, task_dir)
 
     (output_dir / "task.toml").write_text(render_task_toml(task_yaml, warnings), encoding="utf-8")
 
