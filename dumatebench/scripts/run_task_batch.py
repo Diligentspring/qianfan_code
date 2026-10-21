@@ -426,7 +426,7 @@ def default_task_yaml_text(task_dir: Path) -> str:
     return (
         f"task_id: {json.dumps(task_dir.name, ensure_ascii=False)}\n"
         "agent:\n"
-        "  timeout_sec: 900\n"
+        "  timeout_sec: 1800\n"
     )
 
 

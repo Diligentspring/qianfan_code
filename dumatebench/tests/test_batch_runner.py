@@ -302,7 +302,7 @@ class BatchRunnerTest(unittest.TestCase):
         self.assertEqual(build_context.resolve(), runtime.resolve())
         self.assertIn("dockerfile: environment/Dockerfile", compose)
         self.assertIn('cpus: "2"', compose)
-        self.assertIn("mem_limit: 4096m", compose)
+        self.assertIn("mem_limit: 8192m", compose)
         self.assertIn('dumatebench.storage_mb: "12000"', compose)
         self.assertIn(f"{self.task.resolve().as_posix()}/run_outputs:/outputs", compose)
         setup = (runtime / "environment" / "setup.sh").read_text(encoding="utf-8")

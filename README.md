@@ -483,6 +483,24 @@ must use the canonical Harbor registry dataset revision announced by the
 maintainers, cover every task with at least five trials, and use
 `--upload --public`.
 
+`harbor run` accepts any Harbor-compatible agent; it is not limited to the
+bundled ReAct adapter. For the bundled DuMate bridge, select its import path
+and pass your adapter command as constructor kwargs:
+
+```bash
+harbor run --path /path/to/harbor_tasks \
+  --agent dumatebench_cli.harbor_agent:DumateBenchAgent \
+  --model openai/gpt-4o \
+  --ak agent_cmd='python3 /path/to/my_adapter.py' \
+  --ak max_steps=30 --ak adapter_timeout_sec=180
+```
+
+The adapter must implement
+[`agent_contract.md`](dumatebench/agents/agent_contract.md). For Claude Code,
+Codex, or another native CLI, use `dumatebench/agents/native_agent.py` as the
+runner and select its backend/model flags; adding another CLI only requires a
+new command builder/backend there.
+
 After a formal Harbor run, create a score-free pointer manifest:
 
 ```bash

@@ -33,8 +33,9 @@ unchanged from the pre-Harbor layout) before running ``evaluator.py``
 ``/opt/dumate/task``, then copies only the numeric fields of
 ``run_outputs/reward.json`` (dumatebench's
 ``complete_pass``/``partial_pass``/etc.) into ``/logs/verifier/reward.json``,
-which is the file Harbor's verifier reads with priority over
-``reward.txt``.
+which is the file Harbor's verifier reads with priority over ``reward.txt``.
+When ``OPENAI_API_KEY`` and a judge model are supplied, the generated verifier
+also runs the unified LLM judge and includes its normalized score fields.
 
 Every task's ``evaluator/evaluator.py`` also imports a *shared*
 ``evaluate.py`` (dumatebench's per-check implementation functions, one copy
@@ -56,7 +57,8 @@ from typing import Any
 
 import yaml
 
-_SHARED_EVALUATE_PY = Path(__file__).resolve().parents[2] / "dumatebench" / "evaluator" / "evaluate.py"
+_EVALUATOR_ROOT = Path(__file__).resolve().parents[2] / "dumatebench" / "evaluator"
+_SHARED_EVALUATE_PY = _EVALUATOR_ROOT / "evaluate.py"
 
 TASK_TOML_TEMPLATE = """schema_version = "1.4"
 artifacts = [{{ source = "/outputs", destination = "outputs" }}]
@@ -99,9 +101,20 @@ set -e
 mkdir -p /opt/dumate/task/evaluator
 cp /tests/checks.yaml /opt/dumate/task/evaluator/checks.yaml
 DUMATE_EVALUATE_PY=/tests/evaluate.py python3 /tests/evaluator.py --task-dir /opt/dumate/task || true
+if [ -n "${OPENAI_API_KEY:-}" ] && [ -n "${DUMATE_LLM_JUDGE_MODEL:-${OPENAI_MODEL:-}}" ]; then
+  PYTHONPATH=/tests DUMATE_EVALUATE_PY=/tests/evaluate.py \
+    python3 /tests/run_harbor_llm_judge.py --task-dir /opt/dumate/task \
+    --model "${DUMATE_LLM_JUDGE_MODEL:-${OPENAI_MODEL}}" \
+    --base-url "${OPENAI_BASE_URL:-}" || true
+fi
 python3 -c "
 import json
-raw = json.load(open('/opt/dumate/task/run_outputs/reward.json'))
+from pathlib import Path
+root = Path('/opt/dumate/task/run_outputs')
+path = root / 'reward_with_llm_judge.json'
+if not path.is_file():
+    path = root / 'reward.json'
+raw = json.load(path.open())
 numeric = {k: v for k, v in raw.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
 json.dump(numeric, open('/logs/verifier/reward.json', 'w'))
 "
@@ -179,7 +192,12 @@ def render_task_toml(task_yaml: dict[str, Any], warnings: list[str]) -> str:
     which ships alongside task.toml in the exported directory.
     """
     agent_cfg = task_yaml.get("agent") or {}
-    env_cfg = task_yaml.get("environment") or {}
+    env_cfg = dict(task_yaml.get("environment") or {})
+    # DuMateBench paper defaults: 2 vCPU, 8 GiB RAM, and 12 GiB workspace.
+    # Task-specific values still take precedence when present.
+    env_cfg.setdefault("cpus", 2)
+    env_cfg.setdefault("memory_mb", 8192)
+    env_cfg.setdefault("storage_mb", 12000)
 
     task_id = str(task_yaml["task_id"])
     task_name = str(task_yaml.get("task_name") or task_id)
@@ -190,8 +208,8 @@ def render_task_toml(task_yaml: dict[str, Any], warnings: list[str]) -> str:
 
     agent_timeout = agent_cfg.get("timeout_sec")
     if agent_timeout is None:
-        warnings.append(f"{task_id}: agent.timeout_sec missing, defaulting to 900.0")
-        agent_timeout = 900
+        warnings.append(f"{task_id}: agent.timeout_sec missing, defaulting to 1800.0")
+        agent_timeout = 1800
     agent_user = agent_cfg.get("user") or "agent"
 
     workdir = agent_cfg.get("workdir") or "/workspace"
@@ -262,6 +280,18 @@ def export_task(task_dir: Path, output_dir: Path, *, overwrite: bool = False) ->
         shutil.copy2(_SHARED_EVALUATE_PY, tests_dir / "evaluate.py")
     else:
         warnings.append(f"{task_id}: shared evaluate.py not found at {_SHARED_EVALUATE_PY}; tests/test.sh will fail at run time")
+
+    # The Harbor verifier runs inside the task image. Ship the judge package
+    # and its small runner beside test.sh so PYTHONPATH=/tests is sufficient.
+    judge_package = tests_dir / "dumatebench" / "evaluator"
+    if _EVALUATOR_ROOT.is_dir():
+        shutil.copytree(_EVALUATOR_ROOT, judge_package, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("tests", "__pycache__", "*.pyc", "LLM Judge doc"))
+    harbor_judge = Path(__file__).resolve().parents[2] / "dumatebench" / "scripts" / "run_harbor_llm_judge.py"
+    if harbor_judge.is_file():
+        shutil.copy2(harbor_judge, tests_dir / "run_harbor_llm_judge.py")
+    else:
+        warnings.append(f"{task_id}: Harbor judge runner not found at {harbor_judge}")
 
     return ExportResult(task_id=task_id, output_dir=output_dir, warnings=warnings)
 

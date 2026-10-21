@@ -59,6 +59,11 @@ class HarborExportTests(unittest.TestCase):
             self.assertTrue((output / "task.toml").is_file())
             self.assertTrue((output / "tests" / "test.sh").is_file())
             self.assertTrue((output / "tests" / "evaluator.py").is_file())
+            self.assertTrue((output / "tests" / "run_harbor_llm_judge.py").is_file())
+            self.assertTrue((output / "tests" / "dumatebench" / "evaluator" / "llm_judge" / "unified.py").is_file())
+            test_sh = (output / "tests" / "test.sh").read_text(encoding="utf-8")
+            self.assertIn("run_harbor_llm_judge.py", test_sh)
+            self.assertIn("reward_with_llm_judge.json", test_sh)
             self.assertFalse((output / "run_outputs").exists())
 
 
