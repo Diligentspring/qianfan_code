@@ -194,10 +194,19 @@ def _make_harbor_package_portable(output_dir: Path, source_task_dir: Path) -> No
         text = text.replace(f"datasets/dev/template_task/", "")
         if source_prefix:
             text = text.replace(f"{source_prefix}/", "")
+        # The unified judge dispatches by artifact type.  Keep every judge
+        # backend usable in a standalone Harbor image, including optional
+        # document/image/PDF readers and PPT/PDF rendering tools.
+        if "      libreoffice \\" not in text:
+            text = text.replace(
+                "      poppler-utils \\\n",
+                "      poppler-utils \\\n      libreoffice \\\n      ffmpeg \\\n",
+                1,
+            )
         if "pip install --no-cache-dir \"openai>=1.0.0\"" not in text:
             text = text.replace(
                 "\nRUN useradd -ms /bin/bash agent",
-                "\nRUN pip install --no-cache-dir \"openai>=1.0.0\"\n\nRUN useradd -ms /bin/bash agent",
+                "\nRUN pip install --no-cache-dir \\\n      \"openai>=1.0.0\" \\\n      \"openpyxl>=3.1.5\" \\\n      \"python-docx>=1.1.2\" \\\n      \"python-pptx>=1.0.2\" \\\n      \"Pillow>=9.0\" \\\n      \"pypdf>=5.0\" \\\n      \"PyMuPDF>=1.24\" \\\n      \"PyYAML>=6.0\" \\\n      \"icalendar>=5.0.13\" \\\n      \"pytz>=2024.2\" \\\n      \"cairosvg>=2.7\"\n\nRUN useradd -ms /bin/bash agent",
                 1,
             )
         dockerfile.write_text(text, encoding="utf-8")
