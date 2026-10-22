@@ -346,10 +346,12 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         judge_input = json.loads((self.root / "run_outputs" / "excel_llm_judge" / "judge_input.json").read_text(encoding="utf-8"))
         reference_summary = judge_input["user_prompt"]["workspace_reference_summary"]
         self.assertEqual(reference_summary["status"], "ok")
-        self.assertEqual(reference_summary["text_artifacts"][0]["path"], "context.md")
+        # Reference material is namespaced so the judge cannot mistake it for a
+        # candidate artifact.
+        self.assertEqual(reference_summary["text_artifacts"][0]["path"], "references/context.md")
         reference_excel = judge_input["user_prompt"]["reference_excel_artifact_summary"]
         self.assertEqual(reference_excel["excel_file_count"], 1)
-        self.assertEqual(reference_excel["workbooks"][0]["relative_path"], "source_sales.xlsx")
+        self.assertEqual(reference_excel["workbooks"][0]["relative_path"], "references/source_sales.xlsx")
 
     @unittest.skipIf(
         importlib.util.find_spec("pypdf") is None or importlib.util.find_spec("fitz") is None,
@@ -456,7 +458,9 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         item_schema = schema["properties"]["criteria"]["items"]
         self.assertEqual(item_schema["properties"]["id"]["enum"], ["content", "layout", "integrity"])
         evidence_path = item_schema["properties"]["evidence"]["items"]["properties"]["path"]
-        self.assertIn("report.pdf", evidence_path["enum"])
+        # Candidate artifacts are namespaced with an ``outputs/`` prefix so the
+        # judge cannot confuse them with reference material.
+        self.assertIn("outputs/report.pdf", evidence_path["enum"])
 
     def test_pdf_judgment_keeps_low_confidence_score_when_evidence_is_filtered(self):
         class JudgmentClient:
@@ -490,10 +494,13 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         aggregate = result["aggregate"]
         self.assertEqual(aggregate["assessment_coverage"], 1.0)
         self.assertEqual(aggregate["judge_score_conservative"], 91.67)
+        # pdf_LLM_AS_JUDGE.md: missing evidence is reported by the judge but the
+        # program never zeroes the criterion on its own.
         self.assertEqual(aggregate["criteria"][0]["status"], "assessed")
         self.assertEqual(aggregate["criteria"][0]["score"], 3)
-        self.assertEqual(aggregate["criteria"][0]["confidence"], 0.4)
-        self.assertIn("low-confidence evidence", aggregate["criteria"][0]["evidence"][0]["visual_observation"])
+        # The judge's own confidence is reported as-is, not downgraded.
+        self.assertEqual(aggregate["criteria"][0]["confidence"], 0.9)
+        self.assertEqual(aggregate["criteria"][0]["evidence"], [])
 
     def test_pdf_judgment_accepts_prefixed_evidence_paths(self):
         absolute_report = str(self.root / "run_outputs" / "report.pdf")
@@ -523,8 +530,15 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
             model="mock",
         )
 
-        self.assertTrue(all(item["status"] == "assessed" for item in result["aggregate"]["criteria"]))
-        self.assertTrue(all(item["evidence"][0]["path"] == "report.pdf" for item in result["aggregate"]["criteria"]))
+        criteria = result["aggregate"]["criteria"]
+        self.assertTrue(all(item["status"] == "assessed" for item in criteria))
+        # Only the ``outputs/`` namespace identifies a candidate artifact; it is
+        # stripped back to the artifact-relative path. Any other prefix, including
+        # an absolute path, is not a known artifact and is dropped.
+        by_id = {item["id"]: item for item in criteria}
+        self.assertEqual(by_id["content"]["evidence"][0]["path"], "report.pdf")
+        self.assertEqual(by_id["layout"]["evidence"], [])
+        self.assertEqual(by_id["integrity"]["evidence"], [])
 
     def test_image_unified_score_selects_image_judge(self):
         self._write_minimal_png(self.root / "run_outputs" / "images" / "preview.png")
@@ -605,9 +619,9 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         item_schema = criteria_results_schema["items"]
         self.assertEqual(
             item_schema["required"],
-            ["criterion_id", "status", "score", "evidence"],
+            ["id", "status", "score", "evidence", "rationale", "confidence"],
         )
-        self.assertEqual(item_schema["properties"]["criterion_id"]["enum"], ["content", "quality", "completeness"])
+        self.assertEqual(item_schema["properties"]["id"]["enum"], ["content", "quality", "completeness"])
 
     def test_image_rubric_accepts_chinese_dimension_aliases(self):
         rubric = self._image_rubric()
@@ -786,7 +800,7 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         item_schema = schema["properties"]["criteria"]["items"]
         self.assertEqual(item_schema["properties"]["id"]["enum"], ["content", "quality", "completeness"])
 
-    def test_multimodal_rubric_accepts_media_metadata_alias(self):
+    def test_multimodal_rubric_drops_legacy_evidence_type(self):
         rubric = self._multimodal_rubric("video")
         rubric["criteria"][1]["evidence_type"] = "media_metadata"
 
@@ -796,7 +810,10 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
             instruction_hash=stable_hash_multimodal("instruction"),
         )
 
-        self.assertEqual(normalized["criteria"][1]["evidence_type"], "metadata")
+        # MULTIMODAL_LLM_AS_JUDGE_REPORT.md: a legacy rubric's evidence_type is
+        # ignored; assessability comes from the visible candidates, the reference
+        # evidence pool and media transport state.
+        self.assertNotIn("evidence_type", normalized["criteria"][1])
 
     def test_multimodal_rubric_ignores_legacy_golden_review_source(self):
         rubric = self._multimodal_rubric("video")
@@ -810,9 +827,9 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
             instruction_hash=stable_hash_multimodal("instruction"),
         )
 
-        self.assertFalse(normalized["criteria"][0]["needs_human_golden_review"])
-        self.assertIsNone(normalized["criteria"][0]["golden_source"])
-        self.assertEqual(normalized["criteria"][0]["evidence_type"], "media_timestamp")
+        self.assertNotIn("needs_human_golden_review", normalized["criteria"][0])
+        self.assertNotIn("golden_source", normalized["criteria"][0])
+        self.assertNotIn("evidence_type", normalized["criteria"][0])
 
     def test_multimodal_rubric_requests_strict_json_schema(self):
         class RecordingClient:
@@ -836,9 +853,8 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         item_schema = schema["properties"]["criteria"]["items"]
         self.assertNotIn("needs_human_golden_review", item_schema["properties"])
         self.assertNotIn("golden_source", item_schema["properties"])
-        evidence_type_schema = item_schema["properties"]["evidence_type"]
-        self.assertIn("metadata", evidence_type_schema["enum"])
-        self.assertNotIn("human_review", evidence_type_schema["enum"])
+        self.assertNotIn("evidence_type", item_schema["properties"])
+        self.assertIn("covered_check_ids", item_schema["properties"])
 
     def test_multimodal_rubric_keeps_semantic_criteria_with_keyword_checks(self):
         class StaticClient:

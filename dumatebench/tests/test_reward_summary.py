@@ -115,7 +115,7 @@ class RewardSummaryTest(unittest.TestCase):
         summaries = collect_summaries(self.root, dir_glob="group_*")
 
         self.assertEqual([Path(summary.task_dir).name for summary in summaries], ["task_a"])
-        self.assertEqual(summaries[0].final_score, 0.8)
+        self.assertEqual(summaries[0].final_score, 0.86)
 
     def test_dir_glob_uses_direct_child_directories_only(self):
         direct = self.root / "group_1"
