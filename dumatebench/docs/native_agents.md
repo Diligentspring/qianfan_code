@@ -1,5 +1,8 @@
 # Running native Claude Code and Codex agents
 
+For a comparison with the host-side adapter path and steps for adding another
+native CLI, see [`custom_agents.md`](custom_agents.md).
+
 DuMateBench supports three batch agent backends:
 
 | Backend | `--agent-backend` | Model API required |

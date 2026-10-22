@@ -298,7 +298,9 @@ dumate run \
 The command named by `--agent` runs on the host and is invoked once per step.
 It receives the current state on stdin and returns one action on stdout. The
 runner, not the agent process, executes that action inside the task container.
-See the protocol section below before connecting an LLM-backed adapter.
+For the adapter contract, a third-party CLI wrapper example, and the separate
+native-CLI path, see
+[`dumatebench/docs/custom_agents.md`](dumatebench/docs/custom_agents.md).
 
 Useful options include:
 
@@ -460,7 +462,7 @@ Common non-passing outcomes are:
 
 For lower-level environment details, including workspace initialization,
 Docker Compose mounts, tool wrappers, and fault injection, see
-[`dumatebench/docker_environment.md`](dumatebench/docker_environment.md).
+[`dumatebench/docs/docker_environment.md`](dumatebench/docs/docker_environment.md).
 
 ## Harbor integration and submissions
 
@@ -483,9 +485,9 @@ must use the canonical Harbor registry dataset revision announced by the
 maintainers, cover every task with at least five trials, and use
 `--upload --public`.
 
-`harbor run` accepts any Harbor-compatible agent; it is not limited to the
-bundled ReAct adapter. For the bundled DuMate bridge, select its import path
-and pass your adapter command as constructor kwargs:
+`harbor run` accepts any Harbor-compatible agent. For the bundled DuMate
+bridge, select its import path and pass your adapter command as constructor
+kwargs:
 
 ```bash
 harbor run --path /path/to/harbor_tasks \
@@ -496,10 +498,11 @@ harbor run --path /path/to/harbor_tasks \
 ```
 
 The adapter must implement
-[`agent_contract.md`](dumatebench/agents/agent_contract.md). For Claude Code,
-Codex, or another native CLI, use `dumatebench/agents/native_agent.py` as the
-runner and select its backend/model flags; adding another CLI only requires a
-new command builder/backend there.
+[`agent_contract.md`](dumatebench/agents/agent_contract.md). Harbor's custom
+agent interface is separate from `dumate run` and from the native Docker
+runner. For the adapter and native CLI choices, current built-in backends, and
+the files that a new native backend requires, see
+[`custom_agents.md`](dumatebench/docs/custom_agents.md).
 
 After a formal Harbor run, create a score-free pointer manifest:
 

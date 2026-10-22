@@ -35,6 +35,12 @@ dumate run \
   --max-steps 20
 ```
 
+This adapter runs on the host and returns one container command per step. To
+run Claude Code or Codex directly inside the task container, use the native
+runner instead. The two paths, credential handling, and instructions for
+adding another native CLI are documented in
+[`dumatebench/docs/custom_agents.md`](../dumatebench/docs/custom_agents.md).
+
 Run a batch of tasks under a directory:
 
 ```bash
