@@ -78,6 +78,10 @@ timeout_sec = {verifier_timeout_sec}
 collect = []
 
 [verifier.env]
+OPENAI_API_KEY = "${{OPENAI_API_KEY:-}}"
+OPENAI_BASE_URL = "${{OPENAI_BASE_URL:-}}"
+OPENAI_MODEL = "${{OPENAI_MODEL:-}}"
+DUMATE_LLM_JUDGE_MODEL = "${{DUMATE_LLM_JUDGE_MODEL:-}}"
 
 [agent]
 timeout_sec = {agent_timeout_sec}

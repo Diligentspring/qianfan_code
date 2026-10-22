@@ -34,6 +34,15 @@ class HarborExportTests(unittest.TestCase):
         self.assertEqual(config["environment"]["memory_mb"], 4096)
         self.assertEqual(config["environment"]["storage_mb"], 12000)
         self.assertEqual(config["environment"]["gpus"], 0)
+        self.assertEqual(
+            config["verifier"]["env"],
+            {
+                "OPENAI_API_KEY": "${OPENAI_API_KEY:-}",
+                "OPENAI_BASE_URL": "${OPENAI_BASE_URL:-}",
+                "OPENAI_MODEL": "${OPENAI_MODEL:-}",
+                "DUMATE_LLM_JUDGE_MODEL": "${DUMATE_LLM_JUDGE_MODEL:-}",
+            },
+        )
         self.assertEqual(warnings, [])
 
     def test_export_writes_harbor_package_without_runtime_outputs(self) -> None:

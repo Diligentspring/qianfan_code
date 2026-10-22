@@ -178,5 +178,22 @@ one action per step, the adapter path usually needs no framework changes.
 Harbor has its own agent interface. For a DuMateBench adapter, export the task
 and use the bundled bridge agent with `--agent-import-path` and `--ak
 agent_cmd=...`. For other agents, use a Harbor-compatible agent implementation.
-See the Harbor integration section in the repository
+The exported task maps `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, and
+`DUMATE_LLM_JUDGE_MODEL` from Harbor's host environment into the verifier. Load
+credentials from an env file instead of placing the API key in command-line
+arguments:
+
+```bash
+harbor run \
+  --path /path/to/harbor_tasks \
+  --agent-import-path dumatebench_cli.harbor_agent:DumateBenchAgent \
+  --model smoke/model \
+  --ak agent_cmd='python3 /path/to/my_adapter.py' \
+  --env-file /path/to/judge.env
+```
+
+The env file should define `OPENAI_API_KEY` and may define `OPENAI_BASE_URL`
+and either `DUMATE_LLM_JUDGE_MODEL` or `OPENAI_MODEL`. If no judge key is
+available, the deterministic evaluator still runs and Harbor returns its
+score. See the Harbor integration section in the repository
 [`README`](../../README.md#harbor-integration-and-submissions).
