@@ -25,7 +25,7 @@ class RewardSummaryTest(unittest.TestCase):
                     "base_complete_pass": 1,
                     "base_partial_pass": 0.75,
                     "llm_judge_score": 0.6,
-                    "final_score": 0.675,
+                    "final_score": 0.645,
                 },
                 ensure_ascii=False,
             )
@@ -42,7 +42,7 @@ class RewardSummaryTest(unittest.TestCase):
         self.assertEqual(summaries[0].base_complete_pass, 1)
         self.assertEqual(summaries[0].base_partial_pass, 0.75)
         self.assertEqual(summaries[0].llm_judge_score, 0.6)
-        self.assertEqual(summaries[0].final_score, 0.675)
+        self.assertEqual(summaries[0].final_score, 0.645)
 
     def test_include_missing_lists_tasks_without_final_reward(self):
         task = self.root / "group" / "task_ses_missing"
@@ -90,7 +90,7 @@ class RewardSummaryTest(unittest.TestCase):
         self.assertEqual(stats["avg_base_complete_pass"], 0.5)
         self.assertEqual(stats["avg_base_partial_pass"], 0.5)
         self.assertEqual(stats["avg_llm_judge_score"], 0.6)
-        self.assertEqual(stats["avg_final_score"], 0.5)
+        self.assertEqual(stats["avg_final_score"], 0.57)
 
     def test_dir_glob_limits_scan_to_matching_directories(self):
         wanted = self.root / "group_1" / "task_a"

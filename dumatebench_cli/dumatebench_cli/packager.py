@@ -80,7 +80,15 @@ def check_task_dir(task_dir: Path) -> CheckResult:
     checks.append(Check(evaluator_py.exists(), "evaluator/evaluator.py exists"))
 
     compose_file = task_dir / "environment" / "docker-compose.yaml"
-    checks.append(Check(compose_file.exists(), "environment/docker-compose.yaml exists"))
+    if compose_file.exists():
+        checks.append(Check(True, "environment/docker-compose.yaml exists"))
+    else:
+        checks.append(
+            Check(
+                True,
+                "environment/docker-compose.yaml not present (optional; dumate run/Harbor supplies the compose definition)",
+            )
+        )
 
     passed = all(c.ok for c in checks)
     return CheckResult(passed=passed, checks=checks)

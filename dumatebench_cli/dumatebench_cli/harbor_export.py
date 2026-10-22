@@ -59,6 +59,7 @@ from typing import Any
 import yaml
 
 _EVALUATOR_ROOT = Path(__file__).resolve().parents[2] / "dumatebench" / "evaluator"
+_DUMATEBENCH_REQUIREMENTS = _EVALUATOR_ROOT.parent / "requirements.txt"
 _SHARED_EVALUATE_PY = _EVALUATOR_ROOT / "evaluate.py"
 
 TASK_TOML_TEMPLATE = """schema_version = "1.4"
@@ -104,9 +105,23 @@ TEST_SH_TEMPLATE = """#!/bin/bash
 set -e
 
 mkdir -p /opt/dumate/task/evaluator
-cp /tests/checks.yaml /opt/dumate/task/evaluator/checks.yaml
+cp -a /tests/task_evaluator/. /opt/dumate/task/evaluator/
+cp /tests/instruction.md /opt/dumate/task/instruction.md
+if [ -d /tests/web_reference ]; then
+  rm -rf /opt/dumate/task/web_reference
+  cp -a /tests/web_reference /opt/dumate/task/web_reference
+fi
 DUMATE_EVALUATE_PY=/tests/evaluate.py python3 /tests/evaluator.py --task-dir /opt/dumate/task || true
 if [ -n "${OPENAI_API_KEY:-}" ]; then
+  # Harbor runs the verifier inside the task image, which may not include
+  # DuMateBench's host-side judge dependencies. Install them only when a judge
+  # is enabled and imports are missing; preserve the deterministic reward if
+  # the external judge or package index is unavailable.
+  if ! python3 -c "import openai, openpyxl, docx, pptx, PIL, pypdf, fitz, yaml" >/dev/null 2>&1; then
+    python3 -m pip install --disable-pip-version-check --quiet \
+      -r /tests/llm_judge_requirements.txt \
+      > /logs/verifier/llm_judge.install.log 2>&1 || true
+  fi
   # The runner defaults to gpt-4o when no model variable is supplied. Keep
   # stderr as an artifact so a transient/API configuration failure is visible
   # while preserving the deterministic DuMateBench reward.
@@ -324,14 +339,28 @@ def export_task(task_dir: Path, output_dir: Path, *, overwrite: bool = False) ->
     tests_dir = output_dir / "tests"
     tests_dir.mkdir(exist_ok=True)
 
+    instruction_file = task_dir / "instruction.md"
+    if instruction_file.is_file():
+        shutil.copy2(instruction_file, tests_dir / "instruction.md")
+    else:
+        warnings.append(f"{task_id}: instruction.md not found; Harbor judge will not have task instructions")
+
+    web_reference_dir = task_dir / "web_reference"
+    if web_reference_dir.is_dir():
+        shutil.copytree(web_reference_dir, tests_dir / "web_reference", dirs_exist_ok=True)
+
     evaluator_dir = output_dir / "evaluator"
     if evaluator_dir.is_dir():
+        task_evaluator_dir = tests_dir / "task_evaluator"
+        task_evaluator_dir.mkdir(exist_ok=True)
         for item in evaluator_dir.iterdir():
             dest = tests_dir / item.name
             if item.is_dir():
                 shutil.copytree(item, dest)
             else:
                 shutil.copy2(item, dest)
+                if item.suffix.lower() in {".json", ".yaml", ".yml"}:
+                    shutil.copy2(item, task_evaluator_dir / item.name)
     else:
         warnings.append(f"{task_id}: evaluator/ not found; tests/test.sh will fail at run time")
 
@@ -346,6 +375,14 @@ def export_task(task_dir: Path, output_dir: Path, *, overwrite: bool = False) ->
         shutil.copy2(_SHARED_EVALUATE_PY, tests_dir / "evaluate.py")
     else:
         warnings.append(f"{task_id}: shared evaluate.py not found at {_SHARED_EVALUATE_PY}; tests/test.sh will fail at run time")
+
+    if _DUMATEBENCH_REQUIREMENTS.is_file():
+        shutil.copy2(_DUMATEBENCH_REQUIREMENTS, tests_dir / "llm_judge_requirements.txt")
+    else:
+        warnings.append(
+            f"{task_id}: DuMateBench requirements not found at {_DUMATEBENCH_REQUIREMENTS}; "
+            "Harbor judge may lack Python dependencies"
+        )
 
     # The Harbor verifier runs inside the task image. Ship the judge package
     # and its small runner beside test.sh so PYTHONPATH=/tests is sufficient.

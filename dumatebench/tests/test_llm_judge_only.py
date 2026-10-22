@@ -58,7 +58,7 @@ class LlmJudgeOnlyTest(unittest.TestCase):
             self.assertEqual(judge_args["reference_dir"], "workspace_seed")
             self.assertEqual(judge_args["model"], "mock-model")
             (self.task / "run_outputs" / "llm_judge_score.json").write_text(
-                '{"status": "ok", "judge_score": 0.8, "final_score": 0.65}\n',
+                '{"status": "ok", "judge_score": 0.8, "final_score": 0.71}\n',
                 encoding="utf-8",
             )
 
@@ -69,7 +69,7 @@ class LlmJudgeOnlyTest(unittest.TestCase):
         self.assertEqual(result.status, "ok")
         final = json.loads((self.task / "run_outputs" / "reward_with_llm_judge.json").read_text(encoding="utf-8"))
         self.assertEqual(final["llm_judge_score"], 0.8)
-        self.assertEqual(final["final_score"], 0.65)
+        self.assertEqual(final["final_score"], 0.71)
 
     def test_multiple_artifacts_are_judged_and_averaged(self):
         (self.task / "run_outputs" / "reports" / "report.md").write_text("answer", encoding="utf-8")
@@ -110,7 +110,7 @@ class LlmJudgeOnlyTest(unittest.TestCase):
         self.assertEqual(result.status, "missing_artifact")
         final = json.loads((self.task / "run_outputs" / "reward_with_llm_judge.json").read_text(encoding="utf-8"))
         self.assertEqual(final["llm_judge_score"], 0.0)
-        self.assertEqual(final["final_score"], 0.25)
+        self.assertEqual(final["final_score"], 0.15)
         self.assertEqual(final["llm_judge"]["status"], "missing_artifact")
 
     def test_main_returns_success_for_tasks_without_inferred_output(self):

@@ -572,13 +572,15 @@ def prepare_runtime(
     image_name = f"{image_prefix}{backend_component}-{_sanitize_image_component(task_dir.name)}:latest"
     resources = _read_environment_resources(task_dir / "task.yaml")
     resource_lines = ""
-    if resources.get("cpus"):
-        resource_lines += f'    cpus: "{resources["cpus"]}"\n'
-    memory_mb = memory_mb_override if memory_mb_override is not None else resources.get("memory_mb")
+    cpus = resources.get("cpus", "2")
+    if cpus:
+        resource_lines += f'    cpus: "{cpus}"\n'
+    memory_mb = memory_mb_override if memory_mb_override is not None else resources.get("memory_mb", "8192")
     if memory_mb:
         resource_lines += f"    mem_limit: {memory_mb}m\n"
-    if resources.get("storage_mb"):
-        resource_lines += f'    labels:\n      dumatebench.storage_mb: "{resources["storage_mb"]}"\n'
+    storage_mb = resources.get("storage_mb", "12000")
+    if storage_mb:
+        resource_lines += f'    labels:\n      dumatebench.storage_mb: "{storage_mb}"\n'
     compose_text = f"""services:
   task:
     build:
@@ -982,7 +984,7 @@ def _write_aggregate_judge_report(task_dir: Path, reward: dict[str, Any], artifa
         "final_score": (
             None
             if status in {"failed", "skipped_unavailable"}
-            else merge_final_score(reward.get("complete_pass", 0), checklist_score, judge_score)
+            else merge_final_score(checklist_score, judge_score)
         ),
         "artifact_reports": artifact_reports,
         "rule_result": reward,
@@ -1193,7 +1195,7 @@ def write_final_reward(task_dir: Path, output_file: str) -> str | None:
     final_score = (
         None
         if judge_status in {"failed", "skipped_unavailable"} or judge_score is None
-        else merge_final_score(reward.get("complete_pass", 0), checklist_score, judge_score)
+        else merge_final_score(checklist_score, judge_score)
     )
     combined = dict(reward)
     combined["base_complete_pass"] = reward.get("complete_pass", 0)

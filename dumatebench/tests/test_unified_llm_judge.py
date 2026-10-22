@@ -82,7 +82,7 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         self.assertIsNone(report["final_score"])
         self.assertFalse(report["pass"])
 
-    def test_textual_unified_score_averages_checklist_and_judge_scores(self):
+    def test_textual_unified_score_uses_thirty_seventy_checklist_judge_weights(self):
         (self.root / "run_outputs" / "answer.md").write_text("Project Alpha conclusion.", encoding="utf-8")
         rubric = {
             "criteria": [
@@ -162,7 +162,7 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
 
         self.assertEqual(report["checklist_score"], 0.5)
         self.assertEqual(report["judge_score"], 0.75)
-        self.assertEqual(report["final_score"], 0.625)
+        self.assertEqual(report["final_score"], 0.675)
         self.assertTrue(report["pass"])
         self.assertTrue((self.root / "run_outputs" / "unified.json").is_file())
 
@@ -277,20 +277,20 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
                 ],
                 "render_slides": False,
                 "mock_response": json.dumps({"score": 80, "critical_failures": [], "dimensions": []}),
-                "min_final_score": 0.9,
+                "min_final_score": 0.85,
             },
         )
 
         self.assertEqual(report["judge_kind"], "ppt")
         self.assertEqual(report["checklist_score"], 1.0)
         self.assertEqual(report["judge_score"], 0.8)
-        self.assertEqual(report["final_score"], 0.9)
+        self.assertEqual(report["final_score"], 0.86)
         reference_summary = report["judge_report"]["evidence"]["workspace_reference_summary"]
         self.assertEqual(reference_summary["status"], "ok")
         self.assertEqual(reference_summary["text_artifacts"][0]["path"], "context.md")
         reference_ppts = report["judge_report"]["evidence"]["reference_ppt_summaries"]
         self.assertEqual(reference_ppts[0]["reference_path"], "source.pptx")
-        self.assertTrue(evaluate_llm_judge_score(self.root, {**report_args_for_ppt(), "min_final_score": 0.9}))
+        self.assertTrue(evaluate_llm_judge_score(self.root, {**report_args_for_ppt(), "min_final_score": 0.85}))
 
     @unittest.skipIf(openpyxl is None, "openpyxl is not installed")
     def test_excel_unified_score_selects_excel_judge(self):
@@ -339,7 +339,7 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         self.assertEqual(report["judge_kind"], "excel")
         self.assertEqual(report["checklist_score"], 0.5)
         self.assertEqual(report["judge_score"], 0.6)
-        self.assertEqual(report["final_score"], 0.55)
+        self.assertEqual(report["final_score"], 0.57)
         self.assertTrue(report["pass"])
         self.assertTrue((self.root / "run_outputs" / "excel_unified.json").is_file())
         self.assertTrue((self.root / "run_outputs" / "excel_llm_judge" / "judge_result.json").is_file())
@@ -382,7 +382,7 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         self.assertEqual(report["judge_kind"], "pdf")
         self.assertEqual(report["checklist_score"], 0.5)
         self.assertEqual(report["judge_score"], 0.75)
-        self.assertEqual(report["final_score"], 0.625)
+        self.assertEqual(report["final_score"], 0.675)
         self.assertTrue((self.root / "run_outputs" / "pdf_unified.json").is_file())
         self.assertTrue((self.root / "run_outputs" / "pdf_llm_judge" / "judge_result.json").is_file())
 
@@ -555,7 +555,7 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         self.assertEqual(report["judge_kind"], "image")
         self.assertEqual(report["checklist_score"], 1.0)
         self.assertEqual(report["judge_score"], 0.75)
-        self.assertEqual(report["final_score"], 0.875)
+        self.assertEqual(report["final_score"], 0.825)
         self.assertTrue((self.root / "run_outputs" / "image_llm_judge" / "judge_result.json").is_file())
 
     def test_image_judgment_requests_strict_json_schema(self):

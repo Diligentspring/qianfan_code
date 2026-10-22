@@ -288,13 +288,12 @@ def normalize_unit_score(value: Any, *, assume_percent_above_one: bool = True) -
 
 
 def merge_unit_scores(
-    complete_pass: float | None,
     checklist_score: float | None,
     judge_score: float | None,
 ) -> float:
     from ..scoring import final_score
 
-    return final_score(complete_pass, checklist_score, judge_score)
+    return final_score(checklist_score, judge_score)
 
 
 def _run_textual_judge(
@@ -1255,12 +1254,11 @@ def run_llm_judge_score(
 
     raw_judge_score = judge_report.get("judge_score")
     judge_score = normalize_unit_score(raw_judge_score) if raw_judge_score is not None else None
-    complete_pass = normalize_unit_score(rule_result.get("complete_pass", 0.0)) if isinstance(rule_result, dict) else 0.0
     threshold = normalize_unit_score(args.get("min_final_score", 0.7))
     judge_status = str(judge_report.get("status") or "ok")
     judge_reason = str(judge_report.get("reason") or "Unified LLM judge completed.")
     final_score = (
-        merge_unit_scores(complete_pass, checklist_score, judge_score)
+        merge_unit_scores(checklist_score, judge_score)
         if judge_status == "ok" and judge_score is not None
         else None
     )

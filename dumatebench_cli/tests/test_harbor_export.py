@@ -52,6 +52,7 @@ class HarborExportTests(unittest.TestCase):
             output = root / "exported"
             (task / "environment").mkdir(parents=True)
             (task / "evaluator").mkdir()
+            (task / "web_reference").mkdir()
             (task / "run_outputs").mkdir()
             (task / "run_outputs" / "old.txt").write_text("old", encoding="utf-8")
             (task / "task.yaml").write_text(
@@ -59,7 +60,11 @@ class HarborExportTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (task / "instruction.md").write_text("Do the task", encoding="utf-8")
+            (task / "web_reference" / "reference.md").write_text("Reference", encoding="utf-8")
             (task / "evaluator" / "checks.yaml").write_text("checks: []\n", encoding="utf-8")
+            (task / "evaluator" / "llm_judge_criteria.json").write_text(
+                '{"criteria": []}\n', encoding="utf-8"
+            )
             (task / "evaluator" / "evaluator.py").write_text("print('ok')\n", encoding="utf-8")
 
             result = export_task(task, output)
@@ -68,10 +73,18 @@ class HarborExportTests(unittest.TestCase):
             self.assertTrue((output / "task.toml").is_file())
             self.assertTrue((output / "tests" / "test.sh").is_file())
             self.assertTrue((output / "tests" / "evaluator.py").is_file())
+            self.assertTrue((output / "tests" / "instruction.md").is_file())
+            self.assertTrue((output / "tests" / "web_reference" / "reference.md").is_file())
+            self.assertTrue((output / "tests" / "llm_judge_requirements.txt").is_file())
+            self.assertTrue((output / "tests" / "task_evaluator" / "checks.yaml").is_file())
+            self.assertTrue((output / "tests" / "task_evaluator" / "llm_judge_criteria.json").is_file())
             self.assertTrue((output / "tests" / "run_harbor_llm_judge.py").is_file())
             self.assertTrue((output / "tests" / "dumatebench" / "evaluator" / "llm_judge" / "unified.py").is_file())
             test_sh = (output / "tests" / "test.sh").read_text(encoding="utf-8")
             self.assertIn("run_harbor_llm_judge.py", test_sh)
+            self.assertIn("cp /tests/instruction.md /opt/dumate/task/instruction.md", test_sh)
+            self.assertIn("/tests/task_evaluator/", test_sh)
+            self.assertIn("llm_judge_requirements.txt", test_sh)
             self.assertIn("reward_with_llm_judge.json", test_sh)
             self.assertFalse((output / "run_outputs").exists())
 
