@@ -1,6 +1,8 @@
 PDF LLM-as-Judge
 
 # PDF LLM-as-Judge
+> 历史设计报告：下方 `pdf_bench`/`dev` 容器命令来自原实验目录，不适用于当前仓库。当前批量运行和全局 30% checklist + 70% judge 评分请参见 [`DUMATEBENCH_LLM_AS_JUDGE_DESIGN.md`](../DUMATEBENCH_LLM_AS_JUDGE_DESIGN.md)。本报告中的 40% deterministic + 60% judge 指独立 PDF judge 内部的可选混合分数，不是 DuMateBench 最终分数。
+
  DuMateBench PDF 方向 LLM-as-Judge evaluator。确定性 evaluator 负责检查输出路径、文件存在、PDF 可解析性和任务中的机械规则；LLM Judge 负责评估内容正确性、要求完整性、文档结构、版式可读性、视觉一致性和编辑忠实性。
 
 ## 背景

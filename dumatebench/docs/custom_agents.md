@@ -202,4 +202,4 @@ successful judge call has `llm_judge.status` equal to `ok` and a numeric
 `llm_judge_score`; `final_score` is 30% checklist and 70% judge. If no judge
 key is available, the deterministic evaluator still runs, but it does not
 provide a judge score. See the Harbor integration section in the repository
-[`README`](../../README.md#harbor-integration-and-submissions).
+[`README`](../../README.md#e-run-harbor-with-a-model).

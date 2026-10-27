@@ -311,6 +311,7 @@ dumate template fill \
   --dataset "$WORK_ROOT" \
   --template "$TEMPLATE" \
   --task-glob 'task_*'
+```
 
 ```bash
 dumate run \
@@ -352,6 +353,9 @@ dumate harbor export \
   --output "$HARBOR_TASKS" \
   --task-glob 'task_*'
 ```
+
+Unless a source `task.yaml` overrides them, each exported Harbor task gives
+the agent 1800 seconds and the container 8192 MB of memory.
 
 For a single task, use `--task` instead of `--dataset`:
 
@@ -401,14 +405,17 @@ shell that launches Harbor:
 ```bash
 export OPENAI_API_KEY="your-new-token"
 export OPENAI_BASE_URL="https://your-openai-compatible-provider.example/v1"
+export DUMATE_LLM_JUDGE_MODEL="gpt-4o"
 
 # Use an exact model ID exposed by that provider.
 MODEL="openai/claude-opus-4-8"
 ```
 
 For a compatible gateway, set `OPENAI_BASE_URL` to that gateway's `/v1`
-endpoint. Do not print or commit the token. Harbor passes the values to the
-agent container using `--ae`:
+endpoint and choose a judge model that it actually serves. Do not print or
+commit the token. The exported task also reads these
+variables for its LLM judge. Pass literal environment-variable templates to
+Harbor so the key is not expanded into the `harbor run` process arguments:
 
 ```bash
 HARBOR_TASKS=/absolute/path/to/harbor_tasks
@@ -418,8 +425,8 @@ harbor run \
   --path "$HARBOR_TASKS/task_1" \
   --agent openhands-sdk \
   --model "$MODEL" \
-  --ae "LLM_API_KEY=$OPENAI_API_KEY" \
-  --ae "LLM_BASE_URL=$OPENAI_BASE_URL" \
+  --ae 'LLM_API_KEY=${OPENAI_API_KEY}' \
+  --ae 'LLM_BASE_URL=${OPENAI_BASE_URL}' \
   --agent-setup-timeout-multiplier 5 \
   --jobs-dir "$JOBS/smoke-task-1" \
   --n-concurrent 1 \
@@ -456,8 +463,8 @@ harbor run \
   --path "$HARBOR_TASKS" \
   --agent openhands-sdk \
   --model "$MODEL" \
-  --ae "LLM_API_KEY=$OPENAI_API_KEY" \
-  --ae "LLM_BASE_URL=$OPENAI_BASE_URL" \
+  --ae 'LLM_API_KEY=${OPENAI_API_KEY}' \
+  --ae 'LLM_BASE_URL=${OPENAI_BASE_URL}' \
   --agent-setup-timeout-multiplier 5 \
   --jobs-dir "$JOBS/full-200" \
   --n-concurrent 1 \
@@ -503,7 +510,11 @@ For Harbor, inspect the job directory printed at the end of the run:
 <jobs>/<job-id>/<task-id>/result.json
 ```
 
-Interpret results separately:
+The task's verifier artifacts also contain `reward_with_llm_judge.json` when
+the judge runs. Check `llm_judge.status == "ok"` and numeric
+`llm_judge_score` and `final_score` values. The final score is 30% checklist
+(`partial_pass`) and 70% judge. Without `OPENAI_API_KEY`, Harbor still runs the
+deterministic checklist, but does not produce an LLM judge score.
 
 For lower-level environment details, including workspace initialization,
 Docker Compose mounts, tool wrappers, and fault injection, see
@@ -546,7 +557,8 @@ runner. For the adapter and native CLI choices, current built-in backends, and
 the files that a new native backend requires, see
 [`custom_agents.md`](dumatebench/docs/custom_agents.md).
 
-After a formal Harbor run, create a score-free pointer manifest:
+After a formal Harbor run, create a score-free pointer manifest following
+[`leaderboard/SUBMIT.md`](leaderboard/SUBMIT.md).
 
 ## Citation
 
