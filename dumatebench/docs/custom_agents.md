@@ -176,7 +176,7 @@ one action per step, the adapter path usually needs no framework changes.
 ## Harbor Runs
 
 Harbor has its own agent interface. For a DuMateBench adapter, export the task
-and use the bundled bridge agent with `--agent-import-path` and `--ak
+and use the bundled bridge agent with `--agent` and `--ak
 agent_cmd=...`. For other agents, use a Harbor-compatible agent implementation.
 The exported task maps `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, and
 `DUMATE_LLM_JUDGE_MODEL` from Harbor's host environment into the verifier. Load
@@ -186,14 +186,20 @@ arguments:
 ```bash
 harbor run \
   --path /path/to/harbor_tasks \
-  --agent-import-path dumatebench_cli.harbor_agent:DumateBenchAgent \
+  --agent dumatebench_cli.harbor_agent:DumateBenchAgent \
   --model smoke/model \
   --ak agent_cmd='python3 /path/to/my_adapter.py' \
   --env-file /path/to/judge.env
 ```
 
 The env file should define `OPENAI_API_KEY` and may define `OPENAI_BASE_URL`
-and either `DUMATE_LLM_JUDGE_MODEL` or `OPENAI_MODEL`. If no judge key is
-available, the deterministic evaluator still runs and Harbor returns its
-score. See the Harbor integration section in the repository
+and either `DUMATE_LLM_JUDGE_MODEL` or `OPENAI_MODEL`. The exported task gives
+the agent 1800 seconds and the container 8192 MB by default. Set
+`agent.timeout_sec` and `environment.memory_mb` in the source
+`task.yaml` before export to override these limits. Inspect
+`reward_with_llm_judge.json` in the Harbor job's verifier artifacts: a
+successful judge call has `llm_judge.status` equal to `ok` and a numeric
+`llm_judge_score`; `final_score` is 30% checklist and 70% judge. If no judge
+key is available, the deterministic evaluator still runs, but it does not
+provide a judge score. See the Harbor integration section in the repository
 [`README`](../../README.md#harbor-integration-and-submissions).

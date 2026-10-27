@@ -311,24 +311,23 @@ def main() -> int:
             (root / "mock_openai.py").read_text(encoding="utf-8"), encoding="utf-8"
         )
         toml_text = task_toml.read_text(encoding="utf-8")
-        for name, value in (
-            ("OPENAI_API_KEY", "ci-smoke-key"),
-            ("OPENAI_BASE_URL", "http://ci-mock-openai/v1"),
-            ("DUMATE_LLM_JUDGE_MODEL", "smoke-model"),
-        ):
+        for name in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "DUMATE_LLM_JUDGE_MODEL"):
             placeholder = name + ' = "${' + name + ':-}"'
             if placeholder not in toml_text:
                 raise RuntimeError(f"exported Harbor task has no {name} verifier setting")
-            toml_text = toml_text.replace(placeholder, f'{name} = "{value}"')
-        task_toml.write_text(toml_text, encoding="utf-8")
+        env_file = root / "judge.env"
+        env_file.write_text(
+            "OPENAI_API_KEY=ci-smoke-key\n"
+            "OPENAI_BASE_URL=http://ci-mock-openai/v1\n"
+            "DUMATE_LLM_JUDGE_MODEL=smoke-model\n",
+            encoding="utf-8",
+        )
         harbor_env = os.environ.copy()
-        harbor_env.update({
-            "OPENAI_API_KEY": "ci-smoke-key",
-            "OPENAI_BASE_URL": "http://ci-mock-openai/v1",
-            "DUMATE_LLM_JUDGE_MODEL": "smoke-model",
-        })
+        for name in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "DUMATE_LLM_JUDGE_MODEL"):
+            harbor_env.pop(name, None)
         harbor_result = _run([
             "harbor", "run", "--path", str(harbor_tasks), "--agent", "nop",
+            "--env-file", str(env_file),
             "--jobs-dir", str(jobs), "--n-concurrent", "1", "--n-attempts", "1", "--yes", "--debug",
         ], timeout=900, check=False, env=harbor_env)
         harbor_output = harbor_result.stdout + harbor_result.stderr

@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from dumatebench.scripts.run_task_batch import (
     ROOT,
+    _memory_attempts_for_task,
     build_agent_command,
     dedupe_tasks_by_name,
     discover_tasks,
@@ -73,6 +74,18 @@ class BatchRunnerTest(unittest.TestCase):
         self.assertEqual(args.agent_model, "gpt-test")
         self.assertEqual(args.agent_base_url, "https://gateway.example/v1")
         self.assertEqual(args.agent_max_turns, 0)
+
+    def test_native_memory_defaults_to_eight_gib_without_automatic_increase(self):
+        args = parse_args(["--agent-backend", "codex"])
+
+        self.assertEqual(args.native_memory_mb, 8192)
+        self.assertEqual(args.native_retry_memory_mb, 8192)
+        self.assertEqual(_memory_attempts_for_task(self.task, args), [8192])
+
+        args = parse_args([
+            "--agent-backend", "codex", "--native-retry-memory-mb", "16384",
+        ])
+        self.assertEqual(_memory_attempts_for_task(self.task, args), [8192, 16384, 16384])
 
     def test_parse_args_accepts_isolated_run_options(self):
         args = parse_args(["--run-id", "exp-a", "--runs-root", "/tmp/dumate-runs"])

@@ -197,8 +197,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--native-retry-memory-mb",
         type=int,
-        default=_env_int("DUMATE_NATIVE_RETRY_MEMORY_MB", 16384),
-        help="Docker memory limit for codex/claude-code retry attempts after agent return code 137, in MB.",
+        default=_env_int("DUMATE_NATIVE_RETRY_MEMORY_MB", 8192),
+        help="Optional higher Docker memory limit for codex/claude-code retries after return code 137, in MB; defaults to 8192 (no memory retry).",
     )
     parser.add_argument("--final-reward-file", default="run_outputs/reward_with_llm_judge.json")
     parser.add_argument("--skip-llm-judge", action="store_true", help="Do not actively run the unified LLM judge; only merge existing judge reports.")
@@ -348,6 +348,8 @@ def _memory_attempts_for_task(task_dir: Path, args: argparse.Namespace) -> list[
     task_memory_mb = _read_task_memory_mb(task_dir) or 0
     initial_memory_mb = max(task_memory_mb, int(args.native_memory_mb))
     retry_memory_mb = max(task_memory_mb, int(args.native_retry_memory_mb))
+    if retry_memory_mb <= initial_memory_mb:
+        return [initial_memory_mb]
     return [initial_memory_mb, retry_memory_mb, retry_memory_mb]
 
 
