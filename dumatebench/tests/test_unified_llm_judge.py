@@ -10,6 +10,7 @@ from dumatebench.evaluator import (
     run_llm_judge_score,
 )
 from dumatebench.evaluator.llm_judge_pdf.runner import JudgeRunner as PdfJudgeRunner
+from dumatebench.evaluator.llm_judge_pdf.cli import main as pdf_judge_cli_main
 from dumatebench.evaluator.llm_judge_pdf.schema import normalize_rubric, stable_hash
 from dumatebench.evaluator.llm_judge_image.runner import ImageJudgeRunner
 from dumatebench.evaluator.llm_judge_image.schema import normalize_rubric as normalize_image_rubric
@@ -461,6 +462,43 @@ class UnifiedLlmJudgeTest(unittest.TestCase):
         # Candidate artifacts are namespaced with an ``outputs/`` prefix so the
         # judge cannot confuse them with reference material.
         self.assertIn("outputs/report.pdf", evidence_path["enum"])
+
+    @unittest.skipIf(
+        importlib.util.find_spec("pypdf") is None or importlib.util.find_spec("fitz") is None,
+        "PDF judge dependencies are not installed",
+    )
+    def test_pdf_cli_run_and_evaluate_use_current_client_contract(self):
+        class SequenceClient:
+            def __init__(self, payloads):
+                self.payloads = iter(payloads)
+
+            def complete_json(self, messages, response_format=None):
+                del messages, response_format
+                return next(self.payloads)
+
+        judgment = {
+            "criteria": [
+                {"id": criterion_id, "score": 3, "confidence": 0.8, "evidence": [], "rationale": "ok"}
+                for criterion_id in ("content", "layout", "integrity")
+            ],
+            "summary": "ok",
+        }
+        self._write_minimal_pdf(self.root / "run_outputs" / "report.pdf")
+        rubric_path = self.root / "rubric.json"
+        result_path = self.root / "judge_result.json"
+
+        self.assertEqual(pdf_judge_cli_main([
+            "run", "--task-dir", str(self.root), "--rubric-out", str(rubric_path),
+            "--result-out", str(result_path), "--rule-weight", "0",
+        ], client=SequenceClient([self._pdf_rubric(), judgment])), 0)
+        self.assertTrue(rubric_path.is_file())
+        self.assertEqual(json.loads(result_path.read_text())["score"]["final_score"], 75.0)
+
+        self.assertEqual(pdf_judge_cli_main([
+            "evaluate", "--task-dir", str(self.root), "--rubric", str(rubric_path),
+            "--result-out", str(result_path), "--rule-weight", "0",
+        ], client=SequenceClient([judgment])), 0)
+        self.assertEqual(json.loads(result_path.read_text())["score"]["final_score"], 75.0)
 
     def test_pdf_judgment_keeps_low_confidence_score_when_evidence_is_filtered(self):
         class JudgmentClient:

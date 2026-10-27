@@ -140,10 +140,18 @@ def _parse_json_object_response(content: str) -> dict[str, Any]:
 
 
 class _OpenAIJsonClient:
-    def __init__(self, model: str, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        base_url: str | None = None,
+        *,
+        api_key_env: str = "OPENAI_API_KEY",
+        max_tokens: int | None = None,
+    ) -> None:
         self.model = model
         self.base_url = base_url or os.environ.get("OPENAI_BASE_URL")
-        self.max_tokens = int(os.environ.get("DUMATE_LLM_JUDGE_MAX_TOKENS", "16000"))
+        self.api_key_env = api_key_env
+        self.max_tokens = max_tokens if max_tokens is not None else int(os.environ.get("DUMATE_LLM_JUDGE_MAX_TOKENS", "16000"))
         self.retries = int(os.environ.get("DUMATE_LLM_JUDGE_RETRIES", "5"))
 
     def complete_json(
@@ -156,9 +164,9 @@ class _OpenAIJsonClient:
         except ImportError as exc:
             raise RuntimeError("openai>=1.x is required to call the LLM judge") from exc
 
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = os.environ.get(self.api_key_env)
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is required to call the LLM judge")
+            raise RuntimeError(f"{self.api_key_env} is required to call the LLM judge")
         client = OpenAI(api_key=api_key, base_url=self.base_url, max_retries=0)
         last_exc: Exception | None = None
         for attempt in range(self.retries + 1):
