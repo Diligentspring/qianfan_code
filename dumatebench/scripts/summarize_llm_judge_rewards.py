@@ -144,16 +144,17 @@ def read_summary(reward_path: Path, reward_file: str) -> RewardSummary:
     llm_judge_score = _number(data.get("llm_judge_score"))
     if llm_judge_score is None and isinstance(data.get("llm_judge"), dict):
         llm_judge_score = _number(data["llm_judge"].get("score"))
+    true_partial_pass = true_checklist_partial_pass(data)
     true_final_score = true_llm_final_score(true_partial_pass, llm_judge_score)
 
     return RewardSummary(
         task_id=str(data.get("task_id") or task_dir.name),
         task_dir=str(task_dir),
         reward_file=str(reward_path),
-        base_complete_pass=data.get("base_complete_pass"),
-        base_partial_pass=partial_pass,
+        base_complete_pass=data.get("base_complete_pass", data.get("complete_pass")),
+        base_partial_pass=true_partial_pass,
         llm_judge_score=llm_judge_score,
-        final_score=final_score,
+        final_score=true_final_score,
     )
 
 

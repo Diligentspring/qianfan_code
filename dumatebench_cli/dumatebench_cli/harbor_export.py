@@ -139,6 +139,7 @@ if [ -n "${OPENAI_API_KEY:-}" ]; then
 fi
 python3 -c "
 import json
+import shutil
 from pathlib import Path
 root = Path('/opt/dumate/task/run_outputs')
 path = root / 'reward_with_llm_judge.json'
@@ -152,6 +153,21 @@ score = raw.get('final_score')
 if not isinstance(score, (int, float)) or isinstance(score, bool):
     score = raw.get('partial_pass', 0.0)
 json.dump({'reward': score}, open('/logs/verifier/reward.json', 'w'))
+artifact_name = (
+    'reward_with_llm_judge.json'
+    if path.name == 'reward_with_llm_judge.json'
+    else 'dumate_reward.json'
+)
+artifact = Path('/logs/verifier') / artifact_name
+artifact.parent.mkdir(parents=True, exist_ok=True)
+shutil.copy2(path, artifact)
+judge_outputs = root / 'llm_judge_scores'
+if judge_outputs.is_dir():
+    shutil.copytree(
+        judge_outputs,
+        Path('/logs/verifier/llm_judge_scores'),
+        dirs_exist_ok=True,
+    )
 "
 """
 

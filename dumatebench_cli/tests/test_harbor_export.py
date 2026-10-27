@@ -64,7 +64,9 @@ class HarborExportTests(unittest.TestCase):
             )
             (task / "instruction.md").write_text("Do the task", encoding="utf-8")
             (task / "web_reference" / "reference.md").write_text("Reference", encoding="utf-8")
-            (task / "evaluator" / "checks.yaml").write_text("checks: []\n", encoding="utf-8")
+            (task / "evaluator" / "checks.yaml").write_text(
+                "checks:\n  - id: smoke\n    type: evaluate_file_exist\n", encoding="utf-8"
+            )
             (task / "evaluator" / "llm_judge_criteria.json").write_text(
                 '{"criteria": []}\n', encoding="utf-8"
             )

@@ -13,10 +13,13 @@ class PackageCheckTests(unittest.TestCase):
             task = Path(temp_dir)
             (task / "environment").mkdir()
             (task / "evaluator").mkdir()
-            (task / "task.yaml").write_text("task_id: sample\n", encoding="utf-8")
+            (task / "task.yaml").write_text("task_id: sample\nenvironment:\n  allow_internet: false\n", encoding="utf-8")
             (task / "instruction.md").write_text("Do the task.\n", encoding="utf-8")
             (task / "environment" / "Dockerfile").write_text("FROM python:3.12-slim\n", encoding="utf-8")
             (task / "evaluator" / "evaluator.py").write_text("print('{}')\n", encoding="utf-8")
+            (task / "evaluator" / "checks.yaml").write_text(
+                "checks:\n  - id: smoke\n    type: evaluate_file_exist\n", encoding="utf-8"
+            )
 
             result = check_task_dir(task)
 
